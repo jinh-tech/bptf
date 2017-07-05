@@ -3,7 +3,7 @@ import numpy.random as rn
 import sktensor as skt
 
 import pickle
-from path import path
+from path import Path as path
 from time import sleep
 
 
@@ -69,8 +69,8 @@ def preprocess(X):
         X = X.astype(int)
     if isinstance(X, np.ndarray) and is_sparse(X):
         X = sptensor_from_dense_array(X)
-    else:
-        X = skt.dtensor(X)
+    #else:
+        #X = skt.dtensor(X)
     return X
 
 

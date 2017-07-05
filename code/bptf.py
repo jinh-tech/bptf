@@ -9,7 +9,7 @@ import scipy.special as sp
 import sktensor as skt
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from path import path
+#from path import path
 from argparse import ArgumentParser
 from utils import *
 
@@ -168,10 +168,10 @@ class BPTF(BaseEstimator, TransformerMixin):
             delta = (bound - curr_elbo) / abs(curr_elbo) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
-                print 'ITERATION %d:\t\
-                       Time: %f\t\
-                       Objective: %.2f\t\
-                       Change: %.5f\t'\
+                print 'ITERATION %d:  \
+                       Time: %f  \
+                       Objective: %.2f  \
+                       Change: %.5f'  \
                        % (itn, e, bound, delta)
             assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
