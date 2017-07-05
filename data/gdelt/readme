@@ -1,0 +1,3 @@
+non_zero_indices.txt contains indices starting from 1. Subtract 1 from indicies when using python or c++
+
+size of the tensor = 220 x 220 x 20 x 52
