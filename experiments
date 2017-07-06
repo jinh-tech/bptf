@@ -6,6 +6,6 @@ Test MAE for all non zero entries. Trained on all entries ie no train mask used.
 
 gdelt				75579.05 			-					-
 
-movielens			1.99				2.50				
+movielens			1.99				2.50				1.96
 
 x_train_bibtex		0.76				0.86				0.73
