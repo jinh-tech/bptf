@@ -1,0 +1,11 @@
+Experiments
+---------------------------------------------
+Test MAE for all non zero entries. Trained on all entries ie no train mask used. K = 50
+
+					bptf				hcpf-po				hpf
+
+gdelt				75579.05 			-					-
+
+movielens			1.99				2.50				
+
+x_train_bibtex		0.76				0.86				0.73
