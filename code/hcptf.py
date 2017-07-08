@@ -35,6 +35,8 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.E_DK_M = np.empty(self.n_modes, dtype=object)      # arithmetic expectations
         self.G_DK_M = np.empty(self.n_modes, dtype=object)      # geometric expectations
 
+        self.kappa_shp = np.empty(self.n_modes,dtype=object)
+        self.kappa_rte = np.empty(self.n_modes,dtype=object)        
         # Inference cache
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
         self.zeta = None
@@ -114,6 +116,8 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
         self.G_DK_M[m] = np.exp(sp.psi(gamma_DK) - np.log(delta_DK))
         self.beta_M[m] = 1. / self.E_DK_M[m].mean()
+        self.kappa_shp[m] = np.ones(dim,dtype=np.float64) * (self.alpha + K*self.alpha)
+        self.kappa_rte[m] = np.ones(dim,dtype=np.float64)
 
     def _check_component(self, m):
         assert np.isfinite(self.E_DK_M[m]).all()
@@ -140,7 +144,13 @@ class BPTF(BaseEstimator, TransformerMixin):
             uttrkp_DK = self.sumE_MK.prod(axis=0)
         else:
             uttrkp_DK = mask.uttkrp(self.E_DK_M, m)
-        self.delta_DK_M[m][:, :] = self.alpha * self.beta_M[m] + uttrkp_DK
+        if uttrkp_DK.shape == (self.n_components,):
+            uttrkp_DK = uttrkp_DK.reshape((1,-1))
+            uttrkp_DK = uttrkp_DK.repeat(self.mode_dims[m],axis=0)
+        self.delta_DK_M[m][:, :] = (self.kappa_shp[m]/self.kappa_rte[m])[:,np.newaxis] + uttrkp_DK
+
+    def _update_kappa(self,m):
+        self.kappa_rte[m] = self.alpha + (self.gamma_DK_M[m]/self.delta_DK_M[m]).sum(axis=1)
 
     def _update_cache(self, m):
         gamma_DK = self.gamma_DK_M[m]
@@ -166,6 +176,7 @@ class BPTF(BaseEstimator, TransformerMixin):
                 self._update_gamma(m, data)
                 self._update_delta(m, mask)
                 self._update_cache(m)
+                self._update_kappa(m)
                 #self._update_beta(m)  # must come after cache update!
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
