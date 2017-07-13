@@ -13,12 +13,11 @@ from sklearn.base import BaseEstimator, TransformerMixin
 #from path import path
 from argparse import ArgumentParser
 from utils import *
-import models
 
 
 class BPTF(BaseEstimator, TransformerMixin):
     def __init__(self, n_modes=4, n_components=100,  max_iter=200, tol=0.0001,
-                 smoothness=100, verbose=True, alpha=0.3, debug=False):
+                 smoothness=100, verbose=True, alpha=0.1, debug=False):
         self.n_modes = n_modes
         self.n_components = n_components
         self.max_iter = max_iter
@@ -42,11 +41,16 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
         self.zeta = None
         self.nz_recon_I = None
-        self.n_trunc = 10
 
-    def _reconstruct_nz(self):
+    def _reconstruct_nz(self, subs_I_M):
         """Computes the reconstruction for only non-zero entries."""
-        return self.param.lam*self.param.expec.vals
+        I = subs_I_M[0].size
+        K = self.n_components
+        nz_recon_IK = np.ones((I, K))
+        for m in xrange(self.n_modes):
+            nz_recon_IK *= self.G_DK_M[m][subs_I_M[m], :]
+        self.nz_recon_I = nz_recon_IK.sum(axis=1)
+        return self.nz_recon_I
 
     def _elbo(self, data, mask=None):
         """Computes the Evidence Lower Bound (ELBO)."""
@@ -67,7 +71,7 @@ class BPTF(BaseEstimator, TransformerMixin):
         elif isinstance(data, skt.sptensor):
             subs_I_M = data.subs
             vals_I = data.vals
-        nz_recon_I = self._reconstruct_nz()
+        nz_recon_I = self._reconstruct_nz(subs_I_M)
 
         # bound -= np.log(vals_I + 1).sum()
         bound = 0.0
@@ -93,7 +97,6 @@ class BPTF(BaseEstimator, TransformerMixin):
     def _init_all_components(self, mode_dims):
         assert len(mode_dims) == self.n_modes
         self.mode_dims = mode_dims
-        self.param = models.poisson_response(mode_dims,self.n_components,self.n_trunc)
         for m, D in enumerate(mode_dims):
             self._init_component(m, D)
 
@@ -126,11 +129,11 @@ class BPTF(BaseEstimator, TransformerMixin):
         if isinstance(data, skt.dtensor):
             tmp = data.astype(float)
             subs_I_M = data.nonzero()
-            tmp[subs_I_M] /= self._reconstruct_nz()
+            tmp[subs_I_M] /= self._reconstruct_nz(subs_I_M)
             uttkrp_DK = tmp.uttkrp(self.G_DK_M, m)
 
         elif isinstance(data, skt.sptensor):
-            tmp = data.vals / self._reconstruct_nz()
+            tmp = data.vals / self._reconstruct_nz(data.subs)
             uttkrp_DK = sp_uttkrp(tmp, data.subs, m, self.G_DK_M)
 
         self.gamma_DK_M[m][:, :] = self.alpha + self.G_DK_M[m] * uttkrp_DK
@@ -165,13 +168,12 @@ class BPTF(BaseEstimator, TransformerMixin):
         else:
             modes = range(self.n_modes)
         assert all(m in range(self.n_modes) for m in modes)
-        self.param.set_param(data)
+
         curr_elbo = -np.inf
         for itn in xrange(self.max_iter):
             s = time.time()
             for m in modes:
-                self.param.update_expec(data,self.gamma_DK_M/self.delta_DK_M)
-                self._update_gamma(m, self.param.expec)
+                self._update_gamma(m, data)
                 self._update_delta(m, mask)
                 self._update_cache(m)
                 self._update_kappa(m)
@@ -182,7 +184,11 @@ class BPTF(BaseEstimator, TransformerMixin):
             delta = (bound - curr_elbo) / abs(curr_elbo) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
-                print 'ITERATION %d: \tTime: %f \tObjective: %.5f \tChange: %.5f' %(itn, e, bound, delta)
+                print 'ITERATION %d:  \
+                       Time: %f  \
+                       Objective: %.2f  \
+                       Change: %.5f'  \
+                       % (itn, e, bound, delta)
             #assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
             # if delta < self.tol:
@@ -288,7 +294,7 @@ class BPTF(BaseEstimator, TransformerMixin):
         elif isinstance(data, skt.sptensor):
             subs_I_M = data.subs
             vals_I = data.vals
-        nz_recon_I = self._reconstruct_nz()
+        nz_recon_I = self._reconstruct_nz(subs_I_M)
 
         return ((np.absolute(vals_I-nz_recon_I)).sum())/vals_I.size
 
