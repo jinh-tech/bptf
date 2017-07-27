@@ -172,11 +172,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             delta = (bound - curr_elbo) / abs(curr_elbo) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
-                print 'ITERATION %d:  \
-                       Time: %f  \
-                       Objective: %.2f  \
-                       Change: %.5f'  \
-                       % (itn, e, bound, delta)
+                print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
             #assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
             # if delta < self.tol:
