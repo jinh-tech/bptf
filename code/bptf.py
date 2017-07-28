@@ -169,14 +169,14 @@ class BPTF(BaseEstimator, TransformerMixin):
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
             bound = self.mae_nz(data)
-            delta = (bound - curr_elbo) / abs(curr_elbo) if itn > 0 else np.nan
+            delta = (curr_elbo - bound) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
                 print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
             #assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
-            # if delta < self.tol:
-            #     break
+            if delta < self.tol:
+                break
 
     def set_component(self, m, E_DK, G_DK, gamma_DK, delta_DK):
         assert E_DK.shape[1] == self.n_components
@@ -317,7 +317,7 @@ def main():
     mask = None
     if args.mask is not None:
         if args.mask.ext == '.npz':
-            mask = np.load(args.mask)['mask']
+            mask = np.load(args.mask)['data']
             if mask.dtype == 'object':
                 assert mask.size == 1
                 mask = mask[0]
@@ -327,6 +327,9 @@ def main():
         assert any(isinstance(mask, vt) for vt in valid_types)
         assert mask.shape == data.shape
 
+
+    data = data * mask
+    mask = None
     bptf = BPTF(n_modes=data.ndim,
                 n_components=args.n_components,
                 max_iter=args.max_iter,
