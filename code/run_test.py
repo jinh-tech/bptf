@@ -6,8 +6,8 @@ import scipy.special as sp
 import time
 
 
-dataset = "icews_aaron"
-algo = "bptf"
+dataset = "gdelt_aaron"
+algo = "hptf"
 data_path = "data/"+dataset+"/" + dataset +".npz"
 out_path = "output/"+dataset + '_' + algo
 mask_path = "data/"+dataset +"/test_times"
@@ -45,9 +45,12 @@ class tf:
 
 		
 		self.data = data.astype(float)
+		self.mode_dims = np.empty((self.n_modes),dtype=int)
 		for m in range(self.n_modes):
 			self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
 			ind_list[m] = np.array(ind_list[m])
+			self.mode_dims[m] = self.G_DK_M[m].shape[0]
+
 		self.ind = tuple(ind_list)
 
 	def get_params(self,results):
@@ -56,7 +59,9 @@ class tf:
 		self.delta_DK_M = results['delta_DK_M']
 		self.E_DK_M = results['E_DK_M']
 		self.G_DK_M = results['G_DK_M']
-		self.beta_M = results['beta_M']
+		# self.beta_M = results['beta_M']	#for bptf
+		self.kappa_shp = results['kappa_shp']   # for hptf
+		self.kappa_rte = results['kappa_rte']	# for hptf
 
 	def _update_gamma(self, m):
 		
@@ -68,7 +73,11 @@ class tf:
 		
 		self.sumE_MK[m, :] = 1.
 		uttrkp_DK = self.sumE_MK.prod(axis=0)
-		self.delta_DK_M[m][:, :] = self.alpha * self.beta_M[m] + uttrkp_DK
+		# self.delta_DK_M[m][:, :] = self.alpha * self.beta_M[m] + uttrkp_DK # for bptf
+		if uttrkp_DK.shape == (self.n_components,):		#for hptf
+			uttrkp_DK = uttrkp_DK.reshape((1,-1))	#for hptf
+			uttrkp_DK = uttrkp_DK.repeat(self.mode_dims[m],axis=0)	#for hptf
+		self.delta_DK_M[m][:, :] = self.alpha*(self.kappa_shp[m]/self.kappa_rte[m])[:,np.newaxis] + uttrkp_DK 	#for hptf
 
 	def _update_cache(self, m):
 		
@@ -80,6 +89,9 @@ class tf:
 
 	def _update_beta(self, m):
 		self.beta_M[m] = 1. / self.E_DK_M[m].mean()
+
+	def _update_kappa(self,m):
+		self.kappa_rte[m] = self.alpha + (self.gamma_DK_M[m]/self.delta_DK_M[m]).sum(axis=1)
 
 	def _reconstruct_nz(self):
 
@@ -98,7 +110,8 @@ class tf:
 			self._update_gamma(3)
 			self._update_delta(3)
 			self._update_cache(3)
-			self._update_beta(3)
+			# self._update_beta(3)	#for bptf
+			self._update_kappa(3) #for hptf
 			self._check_component(3)
 			print "Iteration %d\t Time %f"%(itn,time.time()-s)
 
@@ -125,7 +138,7 @@ class tf:
 			
 		# mae = 0
 		# mae_nz = 0
-		mae = ((np.absolute(temp_data)).sum())/temp_data.size
+		mae = (np.absolute(temp_data).sum())/temp_data.size
 		mae_nz = (np.absolute(temp_data[nz_ind]).sum())/nz_ind[0].size
 		return mae,mae_nz
 

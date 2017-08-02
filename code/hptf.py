@@ -130,7 +130,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             tmp = data.astype(float)
             subs_I_M = data.nonzero()
             tmp[subs_I_M] /= self._reconstruct_nz(subs_I_M)
-            uttkrp_DK = tmp.uttkrp(self.G_DK_M, m)
+            uttkrp_DK = tmp.uttkrp(self.G_DK_M,m)
 
         elif isinstance(data, skt.sptensor):
             tmp = data.vals / self._reconstruct_nz(data.subs)
@@ -147,7 +147,7 @@ class BPTF(BaseEstimator, TransformerMixin):
         if uttrkp_DK.shape == (self.n_components,):
             uttrkp_DK = uttrkp_DK.reshape((1,-1))
             uttrkp_DK = uttrkp_DK.repeat(self.mode_dims[m],axis=0)
-        self.delta_DK_M[m][:, :] = (self.kappa_shp[m]/self.kappa_rte[m])[:,np.newaxis] + uttrkp_DK
+        self.delta_DK_M[m][:, :] = self.alpha*(self.kappa_shp[m]/self.kappa_rte[m])[:,np.newaxis] + uttrkp_DK
 
     def _update_kappa(self,m):
         self.kappa_rte[m] = self.alpha + (self.gamma_DK_M[m]/self.delta_DK_M[m]).sum(axis=1)
@@ -181,18 +181,14 @@ class BPTF(BaseEstimator, TransformerMixin):
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
             bound = self.mae_nz(data)
-            delta = (bound - curr_elbo) / abs(curr_elbo) if itn > 0 else np.nan
+            delta = (curr_elbo - bound) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
-                print 'ITERATION %d:  \
-                       Time: %f  \
-                       Objective: %.2f  \
-                       Change: %.5f'  \
-                       % (itn, e, bound, delta)
+                print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
             #assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
-            # if delta < self.tol:
-            #     break
+            if delta < self.tol:
+                break
 
     def set_component(self, m, E_DK, G_DK, gamma_DK, delta_DK):
         assert E_DK.shape[1] == self.n_components
@@ -226,6 +222,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             assert np.issubdtype(mask.dtype, int)
         self._init_all_components(data.shape)
         self._update(data, mask=mask)
+        
         return self
 
     def transform(self, modes, data, mask=None, version='geometric'):
@@ -333,7 +330,7 @@ def main():
     mask = None
     if args.mask is not None:
         if args.mask.ext == '.npz':
-            mask = np.load(args.mask)['mask']
+            mask = np.load(args.mask)['data']
             if mask.dtype == 'object':
                 assert mask.size == 1
                 mask = mask[0]
@@ -343,6 +340,8 @@ def main():
         assert any(isinstance(mask, vt) for vt in valid_types)
         assert mask.shape == data.shape
 
+    data = data * mask
+    mask = None
     bptf = BPTF(n_modes=data.ndim,
                 n_components=args.n_components,
                 max_iter=args.max_iter,
@@ -353,7 +352,7 @@ def main():
                 debug=args.debug)
 
     bptf.fit(data, mask=mask)
-    serialize_bptf(bptf, args.out, num=None, desc='trained_model')
+    serialize_hptf(bptf, args.out, num=None, desc='trained_model')
 
 
 if __name__ == '__main__':
