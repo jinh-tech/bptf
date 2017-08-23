@@ -339,9 +339,9 @@ def main():
 
         assert any(isinstance(mask, vt) for vt in valid_types)
         assert mask.shape == data.shape
-
-    data = data * mask
-    mask = None
+        data = data * mask
+        mask = None
+    
     bptf = BPTF(n_modes=data.ndim,
                 n_components=args.n_components,
                 max_iter=args.max_iter,
