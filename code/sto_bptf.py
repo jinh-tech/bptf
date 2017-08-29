@@ -52,48 +52,6 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.nz_recon_I = nz_recon_IK.sum(axis=1)
         return self.nz_recon_I
 
-    def _elbo(self, data, mask=None):
-        """Computes the Evidence Lower Bound (ELBO)."""
-        # if mask is None:
-        #     uttkrp_K = self.sumE_MK.prod(axis=0)
-        # elif isinstance(mask, skt.dtensor):
-        #     uttkrp_DK = mask.uttkrp(self.E_DK_M, 0)
-        #     uttkrp_K = (self.E_DK_M[0] * uttkrp_DK).sum(axis=0)
-        # elif isinstance(mask, skt.sptensor):
-        #     uttkrp_DK = sp_uttkrp(mask.vals, mask.subs, 0, self.G_DK_M)
-        #     uttkrp_K = (self.E_DK_M[0] * uttkrp_DK).sum(axis=0)
-
-        # bound = uttkrp_K.sum()
-
-        if isinstance(data, skt.dtensor):
-            subs_I_M = data.nonzero()
-            vals_I = data[subs_I_M]
-        elif isinstance(data, skt.sptensor):
-            subs_I_M = data.subs
-            vals_I = data.vals
-        nz_recon_I = self._reconstruct_nz(subs_I_M)
-
-        # bound -= np.log(vals_I + 1).sum()
-        bound = 0.0
-        bound -= (vals_I*np.log(vals_I) - vals_I + 1).sum()     #added line
-        bound += (vals_I * np.log(nz_recon_I)).sum()
-        bound -= nz_recon_I.sum()     # added line
-
-        # K = self.n_components
-        # for m in xrange(self.n_modes):
-        #     D = self.mode_dims[m]
-        #     shp = self.alpha
-        #     rte = self.alpha * self.beta_M[m]
-        #     gamma_DK = self.gamma_DK_M[m]
-        #     delta_DK = self.delta_DK_M[m]
-
-        #     bound += (shp - 1.) * (np.log(self.G_DK_M[m]).sum())
-        #     bound -= rte * (self.sumE_MK[m, :].sum())
-        #     bound -= K * D * (sp.gammaln(shp) - shp * np.log(rte))
-        #     bound += (-(gamma_DK - 1.) * sp.psi(gamma_DK) - np.log(delta_DK)
-        #               + gamma_DK + sp.gammaln(gamma_DK)).sum()
-        return bound
-
     def _init_all_components(self, mode_dims):
         assert len(mode_dims) == self.n_modes
         self.mode_dims = mode_dims
@@ -210,19 +168,6 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.delta_DK_M[m] = delta_DK.copy()
         self.beta_M[m] = 1. / E_DK.mean()
 
-    def set_component_like(self, m, model, subs_D=None):
-        assert model.n_modes == self.n_modes
-        assert model.n_components == self.n_components
-        D = model.E_DK_M[m].shape[0]
-        if subs_D is None:
-            subs_D = np.arange(D)
-        assert min(subs_D) >= 0 and max(subs_D) < D
-        E_DK = model.E_DK_M[m][subs_D, :].copy()
-        G_DK = model.G_DK_M[m][subs_D, :].copy()
-        gamma_DK = model.gamma_DK_M[m][subs_D, :].copy()
-        delta_DK = model.delta_DK_M[m][subs_D, :].copy()
-        self.set_component(m, E_DK, G_DK, gamma_DK, delta_DK)
-
     def fit(self, data, mask=None):
         assert data.ndim == self.n_modes
         data = preprocess(data)
@@ -242,64 +187,6 @@ class BPTF(BaseEstimator, TransformerMixin):
         self._init_all_components(data.shape)
         self._update(data, mask=mask)
         return self
-
-    def transform(self, modes, data, mask=None, version='geometric'):
-        """Transform new data given a pre-trained model."""
-        assert all(m in range(self.n_modes) for m in modes)
-        assert (version == 'geometric') or (version == 'arithmetic')
-
-        assert data.ndim == self.n_modes
-        data = preprocess(data)
-        if mask is not None:
-            mask = preprocess(mask)
-            assert data.shape == mask.shape
-            assert is_binary(mask)
-            assert np.issubdtype(mask.dtype, int)
-        self.mode_dims = data.shape
-        for m, D in enumerate(self.mode_dims):
-            if m not in modes:
-                if self.E_DK_M[m].shape[0] != D:
-                    raise ValueError('Pre-trained components dont match new data.')
-            else:
-                self._init_component(m, D)
-        self._update(data, mask=mask, modes=modes)
-
-        if version == 'geometric':
-            return [self.G_DK_M[m] for m in modes]
-        elif version == 'arithmetic':
-            return [self.E_DK_M[m] for m in modes]
-
-    def fit_transform(self, modes, data, mask=None, version='geometric'):
-        assert all(m in range(self.n_modes) for m in modes)
-        assert (version == 'geometric') or (version == 'arithmetic')
-
-        self.fit(data, mask=mask)
-
-        if version == 'geometric':
-            return [self.G_DK_M[m] for m in modes]
-        elif version == 'arithmetic':
-            return [self.E_DK_M[m] for m in modes]
-
-    def reconstruct(self, mask=None, version='geometric'):
-        """Reconstruct data using point estimates of latent factors.
-
-        Currently supported only up to 5-way tensors.
-        """
-        assert (version == 'geometric') or (version == 'arithmetic')
-        if version == 'geometric':
-            tmp = [G_DK.copy() for G_DK in self.G_DK_M]
-        elif version == 'arithmetic':
-            tmp = [E_DK.copy() for E_DK in self.E_DK_M]
-
-        if weights.keys():
-            assert all(m in range(self.n_modes) for m in weights.keys())
-            for m, weight_matrix in weights.iteritems():
-                tmp[m] = weight_matrix
-        Y_pred = parafac(tmp)
-        if drop_diag:
-            diag_idx = np.identity(Y_pred.shape[0]).astype(bool)
-            Y_pred[diag_idx] = 0
-        return Y_pred
 
     def mae_nz(self,data):
 
