@@ -40,17 +40,16 @@ class BPTF(BaseEstimator, TransformerMixin):
         # Inference cache
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
         self.zeta = None
-        self.nz_recon_I = None
 
     def _reconstruct_nz(self, subs_I_M):
-        """Computes the reconstruction for only non-zero entries."""
+        """Computes the reconstruction"""
         I = subs_I_M[0].size
         K = self.n_components
         nz_recon_IK = np.ones((I, K))
         for m in xrange(self.n_modes):
             nz_recon_IK *= self.G_DK_M[m][subs_I_M[m], :]
-        self.nz_recon_I = nz_recon_IK.sum(axis=1)
-        return self.nz_recon_I
+        nz_recon_I = nz_recon_IK.sum(axis=1)
+        return nz_recon_I,nz_recon_IK
 
     def _init_all_components(self, mode_dims):
         assert len(mode_dims) == self.n_modes
@@ -81,32 +80,38 @@ class BPTF(BaseEstimator, TransformerMixin):
         assert np.isfinite(self.gamma_DK_M[m]).all()
         assert np.isfinite(self.delta_DK_M[m]).all()
 
-    def _update_gamma(self, m, data, rand_ind,c):
-        if isinstance(data, skt.dtensor):
-            tmp = data.astype(float)
-            tmp[rand_ind] /= self._reconstruct_nz(rand_ind)
-            uttkrp_DK = tmp.uttkrp(self.G_DK_M, m)
+    def _delta_expec(self,rand_ind,m):
+        
+        expec = np.ones(shape=self.n_components)
+        for i in range(self.batch_size):
+            for j in range(self.n_modes):
+                if j != m:
+                    expec *= E_DK_M[j][rand_ind[j][i],:]
+        return 
 
-        elif isinstance(data, skt.sptensor):
-            
-            data_vals = np.empty(shape=self.batch_size)
-            for i in range(self.batch_size):
-                temp_ind = []
-                for j in range(self.mode_dims):
-                    temp_ind.append(rand_ind[j][i]) 
-                data_vals[i] = data.vals[temp_ind]
-            
-            tmp = data_vals / self._reconstruct_nz(rand_ind)
-            uttkrp_DK = sp_uttkrp(tmp, rand_ind, m, self.G_DK_M)
 
-        self.gamma_DK_M[m][:, :] = (1-c)*self.gamma_DK_M[m][:,:] + c*(self.alpha + (self.size_nz/self.batch_size)*(self.G_DK_M[m] * uttkrp_DK))
+    def _update_gamma_delta(self, m, data):
+        
+        num_ele = self.mode_dims.prod()/self.mode_dims[m]
+        
+        for i in range(0,self.mode_dims[m]):
+            rand_ind = []
+            for j in range(self.n_modes)
+                if j == m:
+                    rand_ind.append(np.ones(shape=self.batch_size)*i)
+                else:
+                    rand_ind.append(np.random.randint(low=0,high=self.mode_dims[j],size=self.batch_size))
 
-    def _update_delta(self, m, mask=None,c):
-        if mask is None:
-            self.sumE_MK[m, :] = 1.
-            uttrkp_DK = self.sumE_MK.prod(axis=0)
-        else:
-            uttrkp_DK = mask.uttkrp(self.E_DK_M, m)
+            nz_recon_I,nz_recon_IK = self._reconstruct_nz(rand_ind)
+            gamma_DK_M[m][i,:] = self.alpha + (((data[rand_ind]/nz_recon_I)*nz_recon_IK).sum(axis=0))*(num_ele/self.batch_size)
+            delta_DK_M[m][i,:] = self.alpha*self.beta_M[m] + (num_ele/self.batch_size)*self._delta_expec(rand_ind,m)
+
+    def _update_delta(self,m):
+        
+        num_ele = self.mode_dims.prod()/self.mode_dims[m]
+        for i in range(self.mode_dims[m]):
+
+
         self.delta_DK_M[m][:, :] = (1-c)*self.delta_DK_M[m][:, :] + c*(self.alpha * self.beta_M[m] + uttrkp_DK)
 
     def _update_cache(self, m):
@@ -116,19 +121,8 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
         self.G_DK_M[m] = np.exp(sp.psi(gamma_DK)) / delta_DK
 
-    def _update_beta(self, m):
-        self.beta_M[m] = 1. / self.E_DK_M[m].mean()
-
-    def _random_index(self):
-        rand_ind = []
-        ind = np.random.randint(low=0,high=self.nz_ind[0].size,size=self.batch_size)
-        for i in range(len(self.nz_ind)):
-            dim_ar = np.empty(shape=self.batch_size)
-            for j in range(self.batch_size):
-                dim_ar[j] = self.nz_ind[i][ind[j]]
-            rand_ind.append(dim_ar)        
-        return tuple(rand_ind)
-
+    # def _update_beta(self, m):
+    #     self.beta_M[m] = 1. / self.E_DK_M[m].mean()
 
     def _update(self, data, mask=None, modes=None):
         if modes is not None:
@@ -140,12 +134,10 @@ class BPTF(BaseEstimator, TransformerMixin):
         curr_elbo = -np.inf
         for itn in xrange(self.max_iter):
             s = time.time()
-            rand_ind = self._random_index()
             for m in modes:
-                self._update_gamma(m, data,rand_ind)
-                self._update_delta(m, mask)
+                self._update_gamma_delta(m, data)
                 self._update_cache(m)
-                self._update_beta(m)  # must come after cache update!
+                # self._update_beta(m)  # must come after cache update!
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
             if itn%self.test_after == 0:
@@ -159,30 +151,15 @@ class BPTF(BaseEstimator, TransformerMixin):
                 # if delta < self.tol:
                 #     break
 
-    def set_component(self, m, E_DK, G_DK, gamma_DK, delta_DK):
-        assert E_DK.shape[1] == self.n_components
-        self.E_DK_M[m] = E_DK.copy()
-        self.sumE_MK[m, :] = E_DK.sum(axis=0)
-        self.G_DK_M[m] = G_DK.copy()
-        self.gamma_DK_M[m] = gamma_DK.copy()
-        self.delta_DK_M[m] = delta_DK.copy()
-        self.beta_M[m] = 1. / E_DK.mean()
-
     def fit(self, data, mask=None):
         assert data.ndim == self.n_modes
         data = preprocess(data)
+
         if mask is not None:
             mask = preprocess(mask)
             assert data.shape == mask.shape
             assert is_binary(mask)
             assert np.issubdtype(mask.dtype, int)
-
-        if isinstance(data, skt.dtensor):
-            self.nz_ind = data.nonzero()
-            self.size_nz = data.nonzero()[0].size
-        elif isinstance(data, skt.sptensor):
-            self.nz_ind = data.subs
-            self.size_nz = data.subs[0].size
 
         self._init_all_components(data.shape)
         self._update(data, mask=mask)
@@ -217,7 +194,6 @@ def main():
     args = p.parse_args()
 
     batch_size = args.batch
-    print batch_size
     
     args.out.makedirs_p()
     assert args.data.exists() and args.out.exists()
