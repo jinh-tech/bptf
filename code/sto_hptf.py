@@ -17,12 +17,12 @@ from utils import *
 class BPTF(BaseEstimator, TransformerMixin):
     def __init__(self,batch_size,n_modes=4, n_components=100,  max_iter=10000, tol=0.0001,
                  smoothness=100, verbose=True, alpha=0.1, debug=False, test_after = 2):
-        
+
         self.test_after = test_after
         self.batch_size = batch_size
         self.n_modes = n_modes
         self.n_components = n_components
-        self.max_iter = max_iter + 1
+        self.max_iter = max_iter
         self.tol = tol
         self.smoothness = smoothness
         self.verbose = verbose
@@ -37,6 +37,8 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.E_DK_M = np.empty(self.n_modes, dtype=object)      # arithmetic expectations
         self.G_DK_M = np.empty(self.n_modes, dtype=object)      # geometric expectations
 
+        self.kappa_shp = np.empty(self.n_modes,dtype=object)
+        self.kappa_rte = np.empty(self.n_modes,dtype=object)        
         # Inference cache
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
         self.zeta = None
@@ -75,13 +77,15 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
         self.G_DK_M[m] = np.exp(sp.psi(gamma_DK) - np.log(delta_DK))
         self.beta_M[m] = 1. / self.E_DK_M[m].mean()
+        self.kappa_shp[m] = np.ones(dim,dtype=np.float64) * (self.alpha + K*self.alpha)
+        self.kappa_rte[m] = np.ones(dim,dtype=np.float64)
 
     def _check_component(self, m):
         assert np.isfinite(self.E_DK_M[m]).all()
         assert np.isfinite(self.G_DK_M[m]).all()
         assert np.isfinite(self.gamma_DK_M[m]).all()
         assert np.isfinite(self.delta_DK_M[m]).all()
-
+    
     def _delta_expec(self,subs_I_M,m):
         
         I = subs_I_M[0].size
@@ -106,7 +110,7 @@ class BPTF(BaseEstimator, TransformerMixin):
                     rand_ind.append(np.random.randint(low=0,high=self.mode_dims[j],size=self.batch_size,dtype=np.int32))
             nz_recon_I,nz_recon_IK = self._reconstruct_nz(rand_ind)
             self.gamma_DK_M[m][i,:] = (1-t)*self.gamma_DK_M[m][i,:] + t*(self.alpha + ((((data[rand_ind]/nz_recon_I)[:,np.newaxis])*nz_recon_IK).sum(axis=0))*(num_ele/self.batch_size))
-            self.delta_DK_M[m][i,:] = (1-t)*self.delta_DK_M[m][i,:] + t*(self.alpha*self.beta_M[m] + (num_ele/self.batch_size)*self._delta_expec(rand_ind,m))
+            self.delta_DK_M[m][i,:] = (1-t)*self.delta_DK_M[m][i,:] + t*(self.alpha*(self.kappa_shp[m][i]/self.kappa_rte[m][i]) + (num_ele/self.batch_size)*self._delta_expec(rand_ind,m))
 
     def _update_cache(self, m):
         gamma_DK = self.gamma_DK_M[m]
@@ -115,11 +119,10 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
         self.G_DK_M[m] = np.exp(sp.psi(gamma_DK)) / delta_DK
 
-    def _update_beta(self, m):
-        self.beta_M[m] = 1. / self.E_DK_M[m].mean()
+    def _update_kappa(self,m,t):
+        self.kappa_rte[m] = (1-t)*self.kappa_rte[m] + t*(self.alpha + (self.gamma_DK_M[m]/self.delta_DK_M[m]).sum(axis=1))
 
     def _update(self, data, mask=None, modes=None):
-        print data.nonzero()[0].size , data.size
         if modes is not None:
             modes = list(set(modes))
         else:
@@ -132,10 +135,10 @@ class BPTF(BaseEstimator, TransformerMixin):
         for itn in xrange(self.max_iter):
             s = time.time()
             for m in modes:
-                
-                self._update_gamma_delta(m, data,np.power(t,-epsilon))
+
+                self._update_gamma_delta(m, data, np.power(t,-epsilon))
                 self._update_cache(m)
-                self._update_beta(m)  # must come after cache update!
+                self._update_kappa(m,np.power(t,-epsilon))
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
             t += 1
@@ -152,6 +155,7 @@ class BPTF(BaseEstimator, TransformerMixin):
                 # if delta < self.tol:
                 #     break
 
+
     def fit(self, data, mask=None):
         assert data.ndim == self.n_modes
         data = skt.dtensor(data)
@@ -161,7 +165,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             assert data.shape == mask.shape
             assert is_binary(mask)
             assert np.issubdtype(mask.dtype, int)
-
+        
         self._init_all_components(data.shape)
         self._update(data, mask=mask)
         return self
@@ -195,7 +199,7 @@ def main():
     args = p.parse_args()
 
     batch_size = args.batch
-    
+
     args.out.makedirs_p()
     assert args.data.exists() and args.out.exists()
     if args.data.ext == '.npz':
@@ -239,7 +243,7 @@ def main():
                 debug=args.debug)
 
     bptf.fit(data, mask=mask)
-    serialize_bptf(bptf, args.out, num=None, desc='trained_model')
+    serialize_hptf(bptf, args.out, num=None, desc='trained_model')
 
 
 if __name__ == '__main__':
