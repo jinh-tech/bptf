@@ -130,8 +130,8 @@ class BPTF(BaseEstimator, TransformerMixin):
         assert all(m in range(self.n_modes) for m in modes)
 
         curr_elbo = -np.inf
-        t = 10
-        epsilon = 0.9
+        t = 5
+        epsilon = 0.55
         for itn in xrange(self.max_iter):
             s = time.time()
             for m in modes:
