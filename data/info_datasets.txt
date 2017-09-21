@@ -1,11 +1,13 @@
 ICEWS_AARON 
 
-Non-zero entries = 
+Non-zero entries = 1535283
+Total entries = 282724560
 Time to train on bptf, 100 iterations = 1062s
 Time to train on sto_bptf, 200 iterations, 1000 batch = 108s
 
 GDELT_AARON
 
-Non-zero entries = 
+Non-zero entries = 3513669
+Total entries = 226764240
 Time to train on bptf, 100 iterations = 2412s
 Time to train on sto_bptf, 200 iterations, 1000 batch = 96s
