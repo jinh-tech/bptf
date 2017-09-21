@@ -119,7 +119,6 @@ class BPTF(BaseEstimator, TransformerMixin):
         self.beta_M[m] = 1. / self.E_DK_M[m].mean()
 
     def _update(self, data, mask=None, modes=None):
-        print data.nonzero()[0].size , data.size
         if modes is not None:
             modes = list(set(modes))
         else:
@@ -140,7 +139,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             # bound = self._elbo(data, mask=mask)
             t += 1
             if itn%self.test_after == 0:
-                bound = self.mae_nz(data)
+                bound = 0#self.mae_nz(data)
                 delta = (curr_elbo - bound) if itn > 0 else np.nan
                 e = time.time() - s
                 
@@ -197,6 +196,7 @@ def main():
     batch_size = args.batch
     
     args.out.makedirs_p()
+    s = time.time()
     assert args.data.exists() and args.out.exists()
     if args.data.ext == '.npz':
         data_dict = np.load(args.data)
@@ -239,6 +239,8 @@ def main():
                 debug=args.debug)
 
     bptf.fit(data, mask=mask)
+    e = time.time()
+    print "Training time = %d"%(e-s)
     serialize_bptf(bptf, args.out, num=None, desc='trained_model')
 
 

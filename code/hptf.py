@@ -180,15 +180,15 @@ class BPTF(BaseEstimator, TransformerMixin):
                 #self._update_beta(m)  # must come after cache update!
                 self._check_component(m)
             # bound = self._elbo(data, mask=mask)
-            bound = self.mae_nz(data)
+            bound = 0 #self.mae_nz(data)
             delta = (curr_elbo - bound) if itn > 0 else np.nan
             e = time.time() - s
             if self.verbose:
                 print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
             #assert ((delta >= 0.0) or (itn == 0))
             curr_elbo = bound
-            if delta < self.tol:
-                break
+            # if delta < self.tol:
+            #     break
 
     def set_component(self, m, E_DK, G_DK, gamma_DK, delta_DK):
         assert E_DK.shape[1] == self.n_components
@@ -311,6 +311,7 @@ def main():
     args = p.parse_args()
 
     args.out.makedirs_p()
+    s = time.time()
     assert args.data.exists() and args.out.exists()
     if args.data.ext == '.npz':
         data_dict = np.load(args.data)
@@ -352,6 +353,9 @@ def main():
                 debug=args.debug)
 
     bptf.fit(data, mask=mask)
+    e = time.time()
+    print "Training time = %d"%(e-s)
+
     serialize_hptf(bptf, args.out, num=None, desc='trained_model')
 
 

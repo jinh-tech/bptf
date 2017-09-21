@@ -186,5 +186,6 @@ for dataset in datasets:
 				m,nz = model.check()
 				mae.append(m)
 				mae_nz.append(nz)
+			
 			np.savetxt(result_path +'/'+ 'mae'+str(top)+str(compliment)[0]+'.txt',mae,fmt='%.3f')
 			np.savetxt(result_path +'/'+ 'mae_nz'+str(top)+str(compliment)[0]+'.txt',mae_nz,fmt='%.3f')
