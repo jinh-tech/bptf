@@ -1,0 +1,5 @@
+duke_awv.npz contains two files : 'awv' and 'co'. Both are sktensor.sptensor .
+
+awv = (2370, 8663, 4066) , min_val = 1, max_val = 704
+co = (2370, 2370) , binary
+
