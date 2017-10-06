@@ -169,7 +169,6 @@ class BPTF(BaseEstimator, TransformerMixin):
 
         return ((np.absolute(vals_I-nz_recon_I)).sum())/vals_I.size
 
-
 def main():
     p = ArgumentParser()
     p.add_argument('-d', '--data', type=path, required=True)
@@ -184,8 +183,9 @@ def main():
     p.add_argument('-bp', '--beta_prime', type=float, default=1.0)
     p.add_argument('-v', '--verbose', action="store_true", default=False)
     p.add_argument('--debug', action="store_true", default=False)
-    args = p.parse_args()
+    p.add_argument('-test','--test',type=bool, default=False)
 
+    args = p.parse_args()
     args.out.makedirs_p()
     s = time.time()
     assert args.data.exists() and args.out.exists()

@@ -196,6 +196,8 @@ def main():
     p.add_argument('-a', '--alpha', type=float, default=0.1)
     p.add_argument('-v', '--verbose', action="store_true", default=False)
     p.add_argument('--debug', action="store_true", default=False)
+    p.add_argument('-test','--test',type=bool, default=False)
+
     args = p.parse_args()
 
     batch_size = args.batch
