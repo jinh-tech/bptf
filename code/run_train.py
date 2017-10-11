@@ -44,7 +44,7 @@ for dataset in datasets:
 	for algo in algos:
 		data_path = "data/"+dataset+"/" + dataset +".npz"
 		out_path = "output/"+dataset+'_'+algo
-		mask_path = "data/"+dataset+"/train_mask"
+		mask_path = "data/"+dataset
 		if not os.path.exists(out_path):
 			os.makedirs(out_path)
 		print "Number of processes = " + str(len(mp.active_children()))
