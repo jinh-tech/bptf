@@ -132,7 +132,7 @@ class BPTF(BaseEstimator, TransformerMixin):
             curr_elbo = bound
             # if delta < self.tol:
             #     break
-            if self.test_after!=None and itn%self.test_after == 0:
+            if self.bool_test==True and itn%self.test_after == 0:
                 self.result_vals[2,0],self.result_vals[2,1] = self._test(orig_data,self.ind_list_t_top1,self.top1,'c')
                 self.result_vals[3,0],self.result_vals[3,1] = self._test(orig_data,self.ind_list_t_top2,self.top2,'c')
                 self.result_vals[0,0],self.result_vals[0,1] = self._test(orig_data,self.ind_list_c_top1,self.top1,'t')
@@ -141,13 +141,12 @@ class BPTF(BaseEstimator, TransformerMixin):
                 print self.result_vals
 
 
-    def fit(self, data,test_times=None,orig_data=None,mask_no=None):
+    def fit(self, data,test_times=None,orig_data=None,mask_no=None,bool_test=False):
         assert data.ndim == self.n_modes
         data = preprocess(data)
-        self.test_after = None
-        self.test_times = None
+        self.bool_test = bool_test
 
-        if test_times != None:
+        if self.bool_test == True:
             self.test_after = 5
             self.test_times = test_times
             self.nonzero_test = orig_data.nonzero()
@@ -295,7 +294,7 @@ def main():
                     alpha=args.alpha,
                     debug=args.debug,
                     out_path=out_path)
-            bptf.fit(new_data,test_times,data,i)
+            bptf.fit(new_data,test_times,data,i,True)
         
 
     else:
